@@ -1,7 +1,7 @@
 import numpy as np
 
 def loadData():
-    trainSet = open("D:/DataSet/Kaggle/Titanic/train.csv")
+    trainSet = open("/media/song/Code/DataSet/Kaggle/Titanic/train.csv")
     trainMat = []
     trainLabel = []
     for line in trainSet:
