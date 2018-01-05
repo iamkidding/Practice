@@ -1,55 +1,75 @@
-import csv
+# from sklearn.preprocessing import Imputer
 import numpy as np
-from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
 from sklearn import svm
 from sklearn import linear_model
+import pandas as pd
 
-# 将数据读取为数组
-def data_reader(data):
-    data_arr = []
-    for line in data_raw:
-        data_arr.append(line)
-    # 选取特征
-    data_feature = []
-    data_y = []
-    for i in range(1, len(data_arr)): #将数据的第一行即特征名去掉
-        data_y.append(float(data_arr[i][1]))
-        # data_arr从第1行开始读取，data_feature从第零行开始append
-        # 将第一个元素转换为list才能append
-        data_feature.append([float(data_arr[i][2])])
-        # 将男性设置为1，女性设置为0
-        if data_arr[i][4] == 'male':
-            data_feature[i-1].append(1.0)
-        else:
-            data_feature[i-1].append(0.0)
-        # 设置缺失值
-        if data_arr[i][5] == '':
-            data_feature[i-1].append(np.nan)
-        else:
-            data_feature[i-1].append(float(data_arr[i][5]))
-        data_feature[i-1].append(float(data_arr[i][6]))
-        data_feature[i-1].append(float(data_arr[i][7]))
-        data_feature[i-1].append(float(data_arr[i][9]))
-    return data_feature, data_y
+data_raw = pd.read_csv(open('C:/Song-Code/Practice/train.csv'))
+test_raw = pd.read_csv(open('C:/Song-Code/Practice/test.csv'))
+# 将男性设置为1，女性设置为0
+# data_raw = data_raw.replace(['male', 'female'], [1, 0])
+# test_raw = test_raw.replace(['male','female'], [1, 0])
+# 将Sex，Pclass设置成虚拟变量
+dum_sex = pd.get_dummies(data_raw['Sex'], prefix="Sex")
+dum_pclass = pd.get_dummies(data_raw['Pclass'], prefix="Pclass")
+data_raw = pd.concat([data_raw, dum_sex, dum_pclass], axis=1)
+dum_sex_test = pd.get_dummies(test_raw['Sex'], prefix="Sex")
+dum_pclass_test = pd.get_dummies(test_raw['Pclass'], prefix="Pclass")
+test_raw = pd.concat([test_raw, dum_sex_test, dum_pclass_test], axis=1)
 
-data_raw = csv.reader(open('C:/Song-Code/Practice/train.csv'))
-test_raw = csv.reader(open('C:/Song-Code/Practice/test.csv'))
-train_data_has_missing_values, train_y = data_reader(data_raw)
-test_data_has_missing_values, test_y = data_reader(data_raw)
-# 使用均值填补缺失值
-imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-train_data = imp.fit(train_data_has_missing_values).transform(train_data_has_missing_values)
-# test_data = imp.fit(test_data_has_missing_values).transform(test_data_has_missing_values)
+# # 使用均值填补缺失值
+data_raw["Age"] = data_raw["Age"].fillna(data_raw["Age"].mean())
+test_raw["Age"] = test_raw["Age"].fillna(test_raw["Age"].mean())
+test_raw["Fare"] = test_raw["Fare"].fillna(test_raw["Fare"].mean())
+# imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+# # data_raw["Age"] = imp.fit(data_raw["Age"]).transform(data_raw["Age"])
+# # data_raw = imp.fit(data_raw).transform(data_raw)
+
 # 标准化
-train_scaled = StandardScaler().fit(train_data).transform(train_data)
-# test_scaled = StandardScaler().fit(test_data).transform(test_data)
+scaler = StandardScaler()
+age_scale_para = scaler.fit(data_raw["Age"].reshape(-1, 1)) # age_scale_para = scaler.fit(data_raw["Age"])
+                                                            # 会出现ValueError: Expected 2D array, got 1D array instead:
+                                                            # 例如数据格式为[1,  2, 3, 4]就会出错，如果把这行数据转换成
+                                                            # [[1], [2], [3], [4]]就不会出错了，所以要对上面导致出错的两
+                                                            # 行代码做出修改：加上.reshape(-1,1）
+                                                            # 主要是工具包版本更新造成的
+data_raw["Age_scaled"] = scaler.fit_transform(data_raw["Age"].reshape(-1, 1), age_scale_para)
+fare_scale_para = scaler.fit(data_raw["Fare"].reshape(-1, 1))
+data_raw["Fare_scaled"] = scaler.fit_transform(data_raw["Fare"].reshape(-1, 1), fare_scale_para)
 
+age_scale_para_test = scaler.fit(test_raw["Age"].reshape(-1, 1))
+test_raw["Age_scaled"] = scaler.fit_transform(test_raw["Age"].reshape(-1, 1), age_scale_para_test)
+fare_scale_para_test = scaler.fit(test_raw["Fare"].reshape(-1, 1))
+test_raw["Fare_scaled"] = scaler.fit_transform(test_raw["Fare"].reshape(-1, 1), fare_scale_para_test)
+
+# 选取要包含在模型中的特征
+train = data_raw.drop(["PassengerId", "Survived", "Name", "Ticket", "Cabin", "Embarked", "Sex",
+                       "Age", "Pclass", "Fare"], axis = 1)
+test = test_raw.drop(["PassengerId", "Name", "Ticket", "Cabin", "Embarked","Sex",
+                       "Age", "Pclass", "Fare"], axis = 1)
+# print(data_raw.info())
+# print(data_raw.describe())
+
+#模型设置
 support_vm = svm.SVC()
+# support_vm = svm.SVC(kernel="linear")
 li = linear_model.LogisticRegression()
 
-svm_scores = cross_val_score(support_vm, train_scaled, train_y, cv = 10)
-li_scores = cross_val_score(li, train_scaled, train_y, cv = 10)
+#模型交叉验证得分
+svm_scores = cross_val_score(support_vm, train, data_raw["Survived"], cv = 10)
+li_scores = cross_val_score(li, train, data_raw["Survived"], cv = 10)
 print(svm_scores.mean())
 print(li_scores.mean())
+
+#
+clf_svm = support_vm.fit(train, data_raw["Survived"])
+clf_li = li.fit(train, data_raw["Survived"])
+# print(clf_svm)
+# # print(clf_li)
+# predi_logi = clf_li.predict(test_data)  #kaggle正确率 0.66985
+predi_svm = clf_svm.predict(test)
+print(predi_svm)
+result = pd.DataFrame({'PassengerId':test_raw['PassengerId'].as_matrix(), 'Survived':predi_svm.astype(np.int32)})
+result.to_csv("C:/Song-Code/Practice/Titanic_logistic_regression_predictions.csv", index=False)
