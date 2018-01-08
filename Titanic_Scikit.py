@@ -6,8 +6,8 @@ from sklearn import svm
 from sklearn import linear_model
 import pandas as pd
 
-data_raw = pd.read_csv(open('C:/Song-Code/Practice/train.csv'))
-test_raw = pd.read_csv(open('C:/Song-Code/Practice/test.csv'))
+data_raw = pd.read_csv(open('C:/Song-Code/Practice/Titanic/train.csv'))
+test_raw = pd.read_csv(open('C:/Song-Code/Practice/Titanic/test.csv'))
 # 将男性设置为1，女性设置为0
 # data_raw = data_raw.replace(['male', 'female'], [1, 0])
 # test_raw = test_raw.replace(['male','female'], [1, 0])
@@ -31,34 +31,38 @@ test_raw["Fare"] = test_raw["Fare"].fillna(test_raw["Fare"].mean())
 
 # 标准化
 scaler = StandardScaler()
-age_scale_para = scaler.fit(data_raw["Age"].reshape(-1, 1)) # age_scale_para = scaler.fit(data_raw["Age"])
-                                                            # 会出现ValueError: Expected 2D array, got 1D array instead:
-                                                            # 例如数据格式为[1,  2, 3, 4]就会出错，如果把这行数据转换成
-                                                            # [[1], [2], [3], [4]]就不会出错了，所以要对上面导致出错的两
-                                                            # 行代码做出修改：加上.reshape(-1,1）
-                                                            # 主要是工具包版本更新造成的
-data_raw["Age_scaled"] = scaler.fit_transform(data_raw["Age"].reshape(-1, 1), age_scale_para)
-fare_scale_para = scaler.fit(data_raw["Fare"].reshape(-1, 1))
-data_raw["Fare_scaled"] = scaler.fit_transform(data_raw["Fare"].reshape(-1, 1), fare_scale_para)
-
-age_scale_para_test = scaler.fit(test_raw["Age"].reshape(-1, 1))
-test_raw["Age_scaled"] = scaler.fit_transform(test_raw["Age"].reshape(-1, 1), age_scale_para_test)
-fare_scale_para_test = scaler.fit(test_raw["Fare"].reshape(-1, 1))
-test_raw["Fare_scaled"] = scaler.fit_transform(test_raw["Fare"].reshape(-1, 1), fare_scale_para_test)
+age_2d_train = pd.DataFrame(data_raw["Age"])
+age_2d_test = pd.DataFrame(test_raw["Age"])
+fare_2d_train = pd.DataFrame(data_raw["Fare"])
+fare_2d_test = pd.DataFrame(test_raw["Fare"])
+age_scale_para = scaler.fit(age_2d_train)
+fare_scale_para = scaler.fit(fare_2d_train)
+data_raw["Age_scaled"] = scaler.fit_transform(age_2d_train, age_scale_para)
+data_raw["Fare_scaled"] = scaler.fit_transform(fare_2d_train, fare_scale_para)
+test_raw["Age_scaled"] = scaler.fit_transform(age_2d_test, age_scale_para)#, age_scale_para_test)
+test_raw["Fare_scaled"] = scaler.fit_transform(fare_2d_test, fare_scale_para)#, fare_scale_para_test)
+# age_scale_para = scaler.fit(data_raw["Age"])
+# 会出现ValueError: Expected 2D array, got 1D array instead:
+# 例如数据格式为[1,  2, 3, 4]就会出错，如果把这行数据转换成[[1], [2], [3], [4]]就不会出错了
+# 要对上面导致出错的两行代码做出修改：加上.reshape(-1,1）,主要是工具包版本更新造成的，但reshape已经被抛弃了
+# 所以对data_raw["Age"]使用其他方式进行shape转换，StandardScaler.fit()的参数.shape应该为(m,n)，不能是1D的(m,)
 
 # 将年龄分组，分为18岁以下，18-60,60以上三组
 age_bins = [0, 12, 100]
 age_group = ['Child', 'Adult']
-Age_cat = pd.cut(data_raw["Age"], age_bins, labels=age_group)
-data_raw_age = pd.merge(data_raw, pd.DataFrame(Age_cat)) #为什么这一步完成后data_raw_age为空
-# age_dum = pd.get_dummies(data_raw['Age_cat'], prefix='Age')
-# data_raw = pd.concat([data_raw, age_dum], axis=1)
+data_raw["Age"] = pd.cut(data_raw["Age"], age_bins, labels=age_group)
+# data_raw_age = pd.concat([data_raw, pd.DataFrame(Age_cat)], axis=1) #为什么这一步完成后data_raw_age为空
+age_dum_train = pd.get_dummies(data_raw['Age'], prefix='Age')
+data_raw = pd.concat([data_raw, age_dum_train], axis=1)
+test_raw["Age"] = pd.cut(test_raw["Age"], age_bins, labels=age_group)
+age_dum_test = pd.get_dummies(test_raw['Age'], prefix='Age')
+test_raw = pd.concat([test_raw, age_dum_test], axis=1)
 
 # 选取要包含在模型中的特征
 train = data_raw.drop(["PassengerId", "Survived", "Name", "Ticket", "Cabin", "Embarked", "Sex",
-                       "Age", "Pclass", "Fare"], axis = 1)
+                       "Age", "Pclass", "Fare", "Age"], axis = 1)
 test = test_raw.drop(["PassengerId", "Name", "Ticket", "Cabin", "Embarked","Sex",
-                       "Age", "Pclass", "Fare"], axis = 1)
+                       "Age", "Pclass", "Fare", "Age"], axis = 1)
 # print(data_raw.info())
 # print(data_raw.describe())
 
@@ -82,4 +86,4 @@ clf_li = li.fit(train, data_raw["Survived"])
 predi_svm = clf_svm.predict(test)
 print(predi_svm)
 result = pd.DataFrame({'PassengerId':test_raw['PassengerId'].as_matrix(), 'Survived':predi_svm.astype(np.int32)})
-result.to_csv("C:/Song-Code/Practice/Titanic_logistic_regression_predictions.csv", index=False)
+result.to_csv("C:/Song-Code/Practice/Titanic/Titanic_logistic_regression_predictions.csv", index=False)
