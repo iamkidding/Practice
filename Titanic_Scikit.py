@@ -1,10 +1,10 @@
-# from sklearn.preprocessing import Imputer
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import cross_val_score
+import pandas as pd
 from sklearn import svm
 from sklearn import linear_model
-import pandas as pd
+from sklearn.ensemble import BaggingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
 
 data_raw = pd.read_csv(open('C:/Song-Code/Practice/Titanic/train.csv'))
 test_raw = pd.read_csv(open('C:/Song-Code/Practice/Titanic/test.csv'))
@@ -12,8 +12,8 @@ test_raw = pd.read_csv(open('C:/Song-Code/Practice/Titanic/test.csv'))
 # data_raw = data_raw.replace(['male', 'female'], [1, 0])
 # test_raw = test_raw.replace(['male','female'], [1, 0])
 # 将Sex，Pclass设置成虚拟变量
-# 不设置成虚拟变量，而是直接将sex改成0,1值，最后的泛化结果较差，在kaggle为95%，
-# 使用虚拟变量，得出的svm模型可以到44%
+# 不设置成虚拟变量，而是直接将sex改成0,1值，最后的泛化结果较差，在kaggle为前95%，
+# 使用虚拟变量，得出的svm模型可以到前44%
 dum_sex = pd.get_dummies(data_raw['Sex'], prefix="Sex")
 dum_pclass = pd.get_dummies(data_raw['Pclass'], prefix="Pclass")
 data_raw = pd.concat([data_raw, dum_sex, dum_pclass], axis=1)
@@ -47,7 +47,7 @@ test_raw["Fare_scaled"] = scaler.fit_transform(fare_2d_test, fare_scale_para)#, 
 # 要对上面导致出错的两行代码做出修改：加上.reshape(-1,1）,主要是工具包版本更新造成的，但reshape已经被抛弃了
 # 所以对data_raw["Age"]使用其他方式进行shape转换，StandardScaler.fit()的参数.shape应该为(m,n)，不能是1D的(m,)
 
-# 将年龄分组，分为18岁以下，18-60,60以上三组
+# 将年龄分组，分为12岁以下，12以上两组
 age_bins = [0, 12, 100]
 age_group = ['Child', 'Adult']
 data_raw["Age"] = pd.cut(data_raw["Age"], age_bins, labels=age_group)
@@ -84,6 +84,13 @@ clf_li = li.fit(train, data_raw["Survived"])
 # # print(clf_li)
 # predi_logi = clf_li.predict(test_data)  #kaggle正确率 0.66985
 predi_svm = clf_svm.predict(test)
-print(predi_svm)
+
 result = pd.DataFrame({'PassengerId':test_raw['PassengerId'].as_matrix(), 'Survived':predi_svm.astype(np.int32)})
 result.to_csv("C:/Song-Code/Practice/Titanic/Titanic_logistic_regression_predictions.csv", index=False)
+
+
+bagging_svm = BaggingClassifier(clf_svm, n_estimators=20, max_samples=0.8, max_features=1.0) #n_jobs意思不明白
+bagging_svm.fit(train, data_raw["Survived"])
+predi_bag = bagging_svm.predict(test)
+result_bag = pd.DataFrame({"PassengerId":test_raw["PassengerId"], "Survived":predi_bag})
+result_bag.to_csv("C:/Song-Code/Practice/Titanic/Titanic_logistic_bagging.csv", index=False)
