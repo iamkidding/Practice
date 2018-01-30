@@ -18,11 +18,11 @@ ax1[0, 0].scatter(x=train_raw['LotArea'], y=train_raw['SalePrice'])
 ax1[0, 1].scatter(x=train_raw['MSSubClass'], y=train_raw['SalePrice'])
 ax1[1, 0].scatter(x=train_raw['OverallQual'], y=train_raw['SalePrice'])
 ax1[1, 1].scatter(x=train_raw['OverallCond'], y=train_raw['SalePrice'])
-# plt.show()
+plt.show()
 corr = train_raw.corr()
 f, ax = plt.subplots()
 sns.heatmap(corr, vmax=0.8, square=True)
-# plt.show()
+plt.show()
 # most_corr = corr.nlargest(10, 'SalePrice') #返回的是包括所有变量的，并在SalePrice那一列按与SalePrice相关系数大小排序的前10行，DataFrame
 most_corr = corr.nlargest(15, 'SalePrice')['SalePrice'] #只取SalePrice那一列
 train_corr = train_raw.loc[:, ['OverallQual', 'GrLivArea', 'GarageArea', 'TotalBsmtSF','TotRmsAbvGrd', 'YearBuilt']]
@@ -95,13 +95,26 @@ scale_para = scale.fit(train_all)
 train_sca = scale.fit_transform(train_all, scale_para)
 test_sca = scale.fit_transform(test_all, scale_para)
 
-ridge = Ridge(alpha=10)
-ls = Lasso(alpha=20)
-rd_cv = cross_val_score(ridge, train_sca, train_raw['SalePrice'], cv=10)
-ls_cv = cross_val_score(ls, train_sca, train_raw['SalePrice'], cv=10)
-print(rd_cv.mean())
-print(rf_cv.mean())
-print(ls_cv.mean())
+# 测试不同alpha值的CV，选出最合适的
+alphas = [20, 30, 50, 75, 100, 110, 125, 130,150]
+rd_means = []
+ls_means = []
+for alpha in alphas:
+    ridge = Ridge(alpha=alpha)
+    ls = Lasso(alpha=alpha)
+    rd_cv = cross_val_score(ridge, train_sca, train_raw['SalePrice'], cv=10)
+    ls_cv = cross_val_score(ls, train_sca, train_raw['SalePrice'], cv=10)
+    rd_means.append(rd_cv.mean())
+    ls_means.append(ls_cv.mean())
+plt.figure(1)
+plt.subplot(211)
+plt.plot(alphas, rd_means, 'b')
+plt.subplot(212)
+plt.plot(alphas, ls_means, 'g')
+plt.show()
+# print(rd_cv.mean())
+# print(rf_cv.mean())
+# print(ls_cv.mean())
 
 ri_model = ridge.fit(train_sca, train_raw['SalePrice'])
 ri_pre = ri_model.predict(test_sca)
