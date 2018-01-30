@@ -4,6 +4,7 @@ from sklearn.svm import SVR
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 from sklearn.linear_model import Lasso
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score
 
@@ -30,8 +31,6 @@ test_corr = test_raw.loc[:, ['OverallQual', 'GrLivArea', 'GarageArea', 'TotalBsm
 
 rf = RandomForestRegressor()
 svr = SVR()
-ridge = Ridge(alpha=10)
-ls = Lasso()
 #Cross Validation
 rf_cv = cross_val_score(rf, train_corr, train_raw['SalePrice'], cv=10)
 svr_cv = cross_val_score(svr, train_corr, train_raw['SalePrice'], cv=10)
@@ -47,8 +46,8 @@ sub.to_csv('C:/Song-Code/Practice/House Prices/sub.csv', index=False)
 train_na = train_raw.drop(["Id", "Alley", "PoolQC", "Fence", "MiscFeature", "FireplaceQu", "SalePrice"], axis=1)
 test_na = test_raw.drop(["Id", "Alley", "PoolQC", "Fence", "MiscFeature", "FireplaceQu"], axis=1)
 # 填补缺失值，使用前面的值填补(pad),bfill是使用后面的值，mean均值
-train = train_na.fillna(method='pad')
-test = test_na.fillna(method='pad')
+train = train_na.fillna(train_na.mean())
+test = test_na.fillna(train_na.mean())
 
 # 设置虚拟变量
 train_dum = pd.get_dummies(train)
@@ -57,7 +56,7 @@ test_dum = pd.get_dummies(test)
 # iter = 0
 colnames_selected = []
 # while (iter < 10):
-rf = RandomForestRegressor(oob_score=True)
+rf = RandomForestRegressor()
 clf = rf.fit(train_dum,train_raw['SalePrice']) # 使用全部特征计算模型，然后选择特征
 # print(clf.feature_importances_)
 i = 0  # 特征的index
@@ -73,7 +72,7 @@ for item in clf.feature_importances_:
 # iter += 1
 # print(i);
 # print(feature_selected)
-print(colnames_selected)
+# print(colnames_selected)
 # colnames_selected = colnames_selected[:25] #先将虚拟变量的列去除 # 这样不行，每次计算的colnames会发生变化
 train_selected = train_dum[colnames_selected]
 test_selected = test_dum[colnames_selected]
@@ -84,7 +83,27 @@ predictions = clf_selected.predict(test_selected)
 # result = pd.DataFrame({'Id': test_raw['Id'], 'SalePrice': predictions})
 # result.to_csv('C:/Song-Code/Practice/House Prices/submission.csv', index=False)
 
-rd_cv = cross_val_score(ridge, train_selected, train_raw['SalePrice'], cv=10)
-ls_cv = cross_val_score(ls, train_selected, train_raw['SalePrice'], cv=10)
+# 此例中将train和test分别做虚拟变量变换会导致train和test的变量个数不一致，train270，test254
+all_data = pd.concat([train, test]) # 这一步不会修改原DataFrame的index，得用reset_index()手动修改
+all_data_dum = pd.get_dummies(all_data)
+all_data_dum = all_data_dum.reset_index()
+train_all = all_data_dum.loc[:1459,]
+test_all = all_data_dum.loc[1460:,]
+#标准化
+scale = StandardScaler()
+scale_para = scale.fit(train_all)
+train_sca = scale.fit_transform(train_all, scale_para)
+test_sca = scale.fit_transform(test_all, scale_para)
+
+ridge = Ridge(alpha=10)
+ls = Lasso(alpha=20)
+rd_cv = cross_val_score(ridge, train_sca, train_raw['SalePrice'], cv=10)
+ls_cv = cross_val_score(ls, train_sca, train_raw['SalePrice'], cv=10)
 print(rd_cv.mean())
+print(rf_cv.mean())
 print(ls_cv.mean())
+
+ri_model = ridge.fit(train_sca, train_raw['SalePrice'])
+ri_pre = ri_model.predict(test_sca)
+re_sub = pd.DataFrame({'Id':test_raw['Id'], 'SalePrice':ri_pre})
+re_sub.to_csv('C:/Song-Code/Practice/House Prices/sub_ridge.csv', index=False)
