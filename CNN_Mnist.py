@@ -1,10 +1,31 @@
 import pandas as pd
+import numpy as np
 import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
+# from tensorflow.examples.tutorials.mnist import input_data
 
+# 读取数据
 def read_data(file_name):
-    data = pd.read_csv(file_name)
+    # 将数据shuffle
+    data = pd.read_csv(file_name).sample(frac=1.0)
+    data = data.reset_index(drop=True)
+    labels = data["label"]
+    # 无通用性，pandas列切片要使用列名，列名为字符串不能用整数1:9之类index的切片
+    data = data.loc[:, "pixel0":]
+    num_classes = pd.unique(labels).size
+    # 将label转换成one_hot形式
+    labels_one_hot = np.zeros((labels.size, num_classes))
+    for i in range(labels.size):
+        labels_one_hot[i][labels[i]] = 1
+    return data, labels_one_hot
 
+# convert class labels from scalars to one-hot vectors e.g. 1 => [0 1 0 0 0 0 0 0 0 0]
+# 另一种转换标签的方法，来自kaggle
+def dense_to_one_hot(labels_dense, num_classes):
+    num_labels = labels_dense.shape[0]
+    index_offset = np.arange(num_labels) * num_classes
+    labels_one_hot = np.zeros((num_labels, num_classes))
+    labels_one_hot.flat[index_offset + labels_dense.ravel()] = 1
+    return labels_one_hot
 
 def weight_variable(shape):
     # 截尾正态分布
@@ -22,8 +43,9 @@ def conv2d(x, W):
 def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
-mnist = input_data.read_data_sets("MNIST_data", one_hot=True)
-# mnist = pd.read_csv("")
+# mnist = input_data.read_data_sets("MNIST_data", one_hot=True)
+train, labels = read_data("C:\Song-Code\Practice\Digit Recognizer/train.csv")
+test = pd.read_csv("C:\Song-Code\Practice\Digit Recognizer/test.csv")
 x = tf.placeholder("float", shape=[None, 784])
 y_ = tf.placeholder("float", shape=[None, 10])
 
@@ -61,13 +83,19 @@ train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 with tf.Session() as sess:
-    sess.run(tf.initialize_all_variables())
-    for i in range(20000):
-        batch = mnist.train.next_batch(50)
-        if i%100 == 0:
-            train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_:batch[1], keep_prob:1.0})
-            print("step %d, training accuracy %g" % (i, train_accuracy))
-        train_step.run(feed_dict={x:batch[0], y_:batch[1], keep_prob:0.5})
-    print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+    sess.run(tf.global_variables_initializer())
+    train_step.run(feed_dict={x:train, y_:labels, keep_prob:0.5})
+    saver = tf.train.Saver()
+    model_path = "D:\Song-Code\model.ckpt"
+    save_path = saver.save(sess, model_path)
+    # saver.restore(sess, model_path)
+    # result = sess.run(y_conv, feed_dict={x: test})
+#     for i in range(20000):
+#         batch = mnist.train.next_batch(50)
+#         if i%100 == 0:
+#             train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_:batch[1], keep_prob:1.0})
+#             print("step %d, training accuracy %g" % (i, train_accuracy))
+#         train_step.run(feed_dict={x:batch[0], y_:batch[1], keep_prob:0.5})
+#     print("test accuracy %g" % accuracy.eval(feed_dict={
+#         x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
 
