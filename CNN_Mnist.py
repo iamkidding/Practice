@@ -32,6 +32,29 @@ def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev=0.1)
     return tf.Variable(initial)
 
+def next_batch(num, data, labels):
+    idx = pd.Series(np.arange(0, data.shape[0]))
+    idx = idx.sample(frac=1.0).reset_index(drop=True)
+    labels = pd.DataFrame(labels)
+    # idx = np.arange(0, data.shape[0])
+    # np.random.shuffle(idx)
+    idx = idx[:num]
+    data_shuffle = data.loc[idx[0],:]
+    labels_shuffle = labels.loc[idx[0],:]
+    for i in range(1, num):
+        data_shuffle = pd.concat([data.loc[idx[i],:].T, data_shuffle.T], axis = 1,ignore_index=True)
+        labels_shuffle = pd.concat([labels.loc[idx[i],:].T, labels_shuffle.T], axis = 1,ignore_index=True)
+    # return np.asyarray(data_shuffle), np.asarray(labels_shuffle)
+    return data_shuffle.T, labels_shuffle.T
+
+def next_batch1(num, train, labels):
+    train_mini = train.sample(num)
+    labels_mini = labels[train_mini.index]
+    train_mini.reset_index(drop=True)
+
+    return train_mini, labels_mini
+
+
 def bias_variable(shape):
     initial = tf.constant(0.1, shape=shape)
     return tf.Variable(initial)
@@ -47,6 +70,7 @@ def max_pool_2x2(x):
 train, labels = read_data("C:\Song-Code\Practice\Digit Recognizer/train.csv")
 test = pd.read_csv("C:\Song-Code\Practice\Digit Recognizer/test.csv")
 x = tf.placeholder("float", shape=[None, 784])
+# x_test = tf.placeholder("float", shape=[None, 784])
 y_ = tf.placeholder("float", shape=[None, 10])
 
 w_conv1 = weight_variable([5, 5, 1, 32])
@@ -84,12 +108,14 @@ correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    train_step.run(feed_dict={x:train, y_:labels, keep_prob:0.5})
+    for i in range(5000):
+        train_mini, labels_mini = next_batch1(50, train, labels)
+        train_step.run(feed_dict={x:train_mini, y_:labels_mini, keep_prob:0.5})
     saver = tf.train.Saver()
-    model_path = "D:\Song-Code\model.ckpt"
+    model_path = "C:\Song-Code\model.ckpt"
     save_path = saver.save(sess, model_path)
-    # saver.restore(sess, model_path)
-    # result = sess.run(y_conv, feed_dict={x: test})
+    saver.restore(sess, model_path)
+    result = sess.run(y_conv, feed_dict={x:test, keep_prob:1.0})
 #     for i in range(20000):
 #         batch = mnist.train.next_batch(50)
 #         if i%100 == 0:
@@ -98,4 +124,3 @@ with tf.Session() as sess:
 #         train_step.run(feed_dict={x:batch[0], y_:batch[1], keep_prob:0.5})
 #     print("test accuracy %g" % accuracy.eval(feed_dict={
 #         x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
-
