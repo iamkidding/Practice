@@ -18,6 +18,12 @@ def read_data(file_name):
         labels_one_hot[i][labels[i]] = 1
     return data, labels_one_hot
 
+def to_excel(data):
+    data_set = pd.Series(data)
+    index = [i for i in range(1, data_set.shape[0]+1)]
+    submission = pd.DataFrame({'ImageId':pd.Series(index), 'Label':data_set[0]})
+    submission.to_csv("C:/Song-Code/Practice/CNN_Mnist_sub.csv", index=False)
+
 # convert class labels from scalars to one-hot vectors e.g. 1 => [0 1 0 0 0 0 0 0 0 0]
 # 另一种转换标签的方法，来自kaggle
 def dense_to_one_hot(labels_dense, num_classes):
@@ -27,33 +33,27 @@ def dense_to_one_hot(labels_dense, num_classes):
     labels_one_hot.flat[index_offset + labels_dense.ravel()] = 1
     return labels_one_hot
 
+def one_hot_to_dense(data):
+    # axis: Bydefault, the index is into the flattened array, otherwise along
+    # the specified axis. axis=1按行，axis=0,列
+    return data.argmax(axis=1)
+
 def weight_variable(shape):
     # 截尾正态分布
     initial = tf.truncated_normal(shape, stddev=0.1)
     return tf.Variable(initial)
 
-def next_batch(num, data, labels):
-    idx = pd.Series(np.arange(0, data.shape[0]))
-    idx = idx.sample(frac=1.0).reset_index(drop=True)
-    labels = pd.DataFrame(labels)
-    # idx = np.arange(0, data.shape[0])
-    # np.random.shuffle(idx)
-    idx = idx[:num]
-    data_shuffle = data.loc[idx[0],:]
-    labels_shuffle = labels.loc[idx[0],:]
-    for i in range(1, num):
-        data_shuffle = pd.concat([data.loc[idx[i],:].T, data_shuffle.T], axis = 1,ignore_index=True)
-        labels_shuffle = pd.concat([labels.loc[idx[i],:].T, labels_shuffle.T], axis = 1,ignore_index=True)
-    # return np.asyarray(data_shuffle), np.asarray(labels_shuffle)
-    return data_shuffle.T, labels_shuffle.T
+def min_max_norm(data):
+    norm = data / data.max()
+    norm = norm.fillna(0)
+    return norm
 
-def next_batch1(num, train, labels):
+def next_batch(num, train, labels):
     train_mini = train.sample(num)
     labels_mini = labels[train_mini.index]
     train_mini.reset_index(drop=True)
 
     return train_mini, labels_mini
-
 
 def bias_variable(shape):
     initial = tf.constant(0.1, shape=shape)
@@ -69,6 +69,8 @@ def max_pool_2x2(x):
 # mnist = input_data.read_data_sets("MNIST_data", one_hot=True)
 train, labels = read_data("C:\Song-Code\Practice\Digit Recognizer/train.csv")
 test = pd.read_csv("C:\Song-Code\Practice\Digit Recognizer/test.csv")
+train = min_max_norm(train)
+test = min_max_norm(test)
 x = tf.placeholder("float", shape=[None, 784])
 # x_test = tf.placeholder("float", shape=[None, 784])
 y_ = tf.placeholder("float", shape=[None, 10])
@@ -109,13 +111,17 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(5000):
-        train_mini, labels_mini = next_batch1(50, train, labels)
+        train_mini, labels_mini = next_batch(50, train, labels)
+        # if i % 100 == 0:
+        #     train_accuracy = accuracy.eval(feed_dict={x:train_mini, y_:labels_mini, keep_prob:1.0})
+        #     print("step %d, training accuracy %g" % (i, train_accuracy))
         train_step.run(feed_dict={x:train_mini, y_:labels_mini, keep_prob:0.5})
     saver = tf.train.Saver()
-    model_path = "C:\Song-Code\model.ckpt"
+    model_path = "C:\Song-Code\model\CNN_Mnist.ckpt"
     save_path = saver.save(sess, model_path)
     saver.restore(sess, model_path)
     result = sess.run(y_conv, feed_dict={x:test, keep_prob:1.0})
+
 #     for i in range(20000):
 #         batch = mnist.train.next_batch(50)
 #         if i%100 == 0:
