@@ -16,6 +16,7 @@ def read_resize_data(file_route, width, height):
         image = image / image.max() # 归一化
 
         data[i] = image
+        i +=1
     return data
 
 def one_hot(labels):
@@ -49,6 +50,12 @@ def max_pool(x):
 train_route = "C:/Song-Code/Practice/Dog Breed Identification/train"
 test_route = "C:/Song-Code/Practice/Dog Breed Identification/test"
 labels = pd.read_csv("C:/Song-Code/Practice/Dog Breed Identification/labels.csv")
+classes = pd.get_dummies(labels["breed"]).columns
+
+test_id = os.listdir(test_route) # 文件名带着扩展名
+for file in test_id:
+    file = file.split(".")[0]
+
 train = read_resize_data(train_route, 60, 60)
 test = read_resize_data(test_route, 60, 60)
 
@@ -95,4 +102,9 @@ with tf.Session() as sess:
     model_path = "C:\Song-Code\model\Dog_Breed_Identification.ckpt"
     save_path = saver.save(sess, model_path)
     saver.restore(sess, model_path)
+
     result = sess.run(y_conv, feed_dict={x:test, keep_prob:1.0})
+    re_pd = pd.DataFrame(result)
+    re_pd.columns = classes # 重名列
+    re_pd.insert(0, "id", test_id) # 插入id
+    re_pd.to_csv("C:/Song-Code/Practice/Dog Breed Identification/sub.csv", index=False)
