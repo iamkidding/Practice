@@ -13,7 +13,7 @@ def read_resize_data(file_route, width, height):
         image = cv2.resize(image, (width, height))
         # image = tf.reshape(image, [width, height, 3])
         image = np.array(image)
-        image = image / image.max() # 归一化
+        image = image - image.mean()
 
         data[i] = image
         i +=1
@@ -87,16 +87,27 @@ h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 w_fc2 = weights_init([1024, 120])
 b_fc2 = bias_init([120])
 
-y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, w_fc2) + b_fc2)
+# y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, w_fc2) + b_fc2)
+y_conv = tf.matmul(h_fc1_drop, w_fc2) + b_fc2
 
-# 损失函数和梯度优化方法
-cross_entropy = -tf.reduce_sum(y_*tf.log(y_conv))
-train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+# 损失函数
+# cross_entropy = -tf.reduce_sum(y_*tf.log(y_conv+1e-10))
+loss_function = tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_conv)
+cross_entropy = tf.reduce_sum(loss_function)
+
+# 梯度优化方法
+train_step = tf.train.AdamOptimizer(0.1).minimize(cross_entropy)
+correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_,1))
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(5000):
-        train_mini, labels_mini = next_batch(train, labels, 50)
+        train_mini, labels_mini = next_batch(train, labels, 1)
+        if i % 100 == 0: # 每100次进行一次验证
+            train_accuracy = accuracy.eval(feed_dict={x: train_mini, y_: labels_mini, keep_prob: 1.0})
+            loss = cross_entropy.eval(feed_dict={x: train_mini, y_: labels_mini, keep_prob: 1.0})
+            print("step %d, training accuracy %g, loss %g" % (i, train_accuracy, loss))
         train_step.run(feed_dict={x:train_mini, y_:labels_mini, keep_prob:0.5})
     saver = tf.train.Saver()
     model_path = "C:\Song-Code\model\Dog_Breed_Identification.ckpt"
