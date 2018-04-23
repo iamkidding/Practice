@@ -4,7 +4,29 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
-def read_resize_data(file_route, width, height):
+def read_resize_train_val(file_route, width, height):
+    files = os.listdir(file_route)
+    val_num = 1000 # 选1000个图片做validation,通过labels，前9222个图片包括所有的标签
+    train_num = len(files) - 1000
+    train = np.zeros((train_num, width, height, 3)) # 保存处理后的图像
+    val = np.zeros((val_num, width, height, 3)) # 保存处理后的图像
+    i = 0 # 计数
+    for file in files:
+        image = cv2.imread(file_route +"/" +file)
+        image = cv2.resize(image, (width, height))
+        # image = tf.reshape(image, [width, height, 3])
+        image = np.array(image)
+        image = image - image.mean() # 零均值
+        image /= np.std(image) # 归一化
+
+        if i < train_num:
+            train[i] = image
+        else:
+            val[i-train_num] = image
+        i += 1
+    return train, val
+
+def read_resize_test(file_route, width, height):
     files = os.listdir(file_route)
     data = np.zeros((len(files), width, height, 3)) # 保存处理后的图像
     i = 0 # 计数
@@ -35,6 +57,9 @@ def next_batch(data, labels, num):
 
     return train_mini, labels_mini
 
+def next_batch_to_predict(test, num):
+    pass
+
 def weights_init(name,shape):
     # return tf.Variable(tf.truncated_normal(shape, stddev=0.01))
     return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.xavier_initializer())
@@ -52,14 +77,16 @@ def max_pool(x):
 train_route = "C:/Song-Code/Practice/Dog Breed Identification/train"
 test_route = "C:/Song-Code/Practice/Dog Breed Identification/test"
 labels = pd.read_csv("C:/Song-Code/Practice/Dog Breed Identification/labels.csv")
+train_labels = labels.loc[:9222, :]
+val_labels = labels.loc[9222:, :].reset_index(drop=True)
 classes = pd.get_dummies(labels["breed"]).columns
 
 test_id = os.listdir(test_route) # 文件名带着扩展名
-for file in test_id:
-    file = file.split(".")[0]
+for i in range(len(test_id)):
+    test_id[i] = test_id[i].split(".")[0]
 
-train = read_resize_data(train_route, 64, 64)
-test = read_resize_data(test_route, 64, 64)
+train, val = read_resize_train_val(train_route, 64, 64)
+test = read_resize_test(test_route, 64, 64)
 
 x = tf.placeholder("float", shape=[None, 64, 64, 3])
 y = tf.placeholder("float", shape=[None, 120])
@@ -100,11 +127,12 @@ w_fc2 = weights_init("w_fc2", [1024, 120])
 # w_fc2 = tf.get_variable("w_fc2", shape=[1024, 120], initializer=tf.contrib.layers.xavier_initializer())
 b_fc2 = bias_init([120])
 
-# y_ = tf.nn.softmax(tf.matmul(h_fc1_drop, w_fc2) + b_fc2)
-y_ = tf.matmul(h_fc1_drop, w_fc2) + b_fc2
+y_ = tf.nn.softmax(tf.matmul(h_fc1_drop, w_fc2) + b_fc2) # 预测时候用
+# y_ = tf.matmul(h_fc1_drop, w_fc2) + b_fc2  # 训练时候用
 
 # 损失函数
 # cross_entropy = -tf.reduce_sum(y_*tf.log(y_+1e-10))
+# 使用下面的损失函数，在网络中的最后输出为参数*全连接层加上偏置，而不是softmax的结果
 loss_function = tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_)
 cross_entropy = tf.reduce_sum(loss_function)
 
@@ -116,21 +144,36 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for i in range(5000):
-        train_mini, labels_mini = next_batch(train, labels, 50)
-        if i % 100 == 0: # 每100次进行一次验证
-            train_accuracy = accuracy.eval(feed_dict={x: train_mini, y: labels_mini, keep_prob: 1.0, is_training: True})
-            loss = cross_entropy.eval(feed_dict={x: train_mini, y: labels_mini, keep_prob: 1.0, is_training: True})
-            print("step %d, training accuracy %g, loss %g" % (i, train_accuracy, loss))
-        train_step.run(feed_dict={x:train_mini, y:labels_mini, keep_prob:0.5, is_training:True})
+    # for i in range(16000):
+    #     train_mini, labels_mini = next_batch(train, train_labels, 50)
+    #     val_mini, vl_mini = next_batch(val, val_labels, 10) # 验证集
+    #     if i % 100 == 0: # 每100次进行一次验证
+    #         train_accuracy = accuracy.eval(feed_dict={x: train_mini, y: labels_mini, keep_prob: 1.0, is_training: True})
+    #         val_accuracy = accuracy.eval(feed_dict={x: val_mini, y: vl_mini, keep_prob: 1.0, is_training: False})
+    #         loss = cross_entropy.eval(feed_dict={x: train_mini, y: labels_mini, keep_prob: 1.0, is_training: True})
+    #         print("step %d, training acc %g, validation acc %g, loss %g" % (i, train_accuracy, val_accuracy, loss))
+    #     train_step.run(feed_dict={x:train_mini, y:labels_mini, keep_prob:0.5, is_training:True})
+    #     if i % 1000 == 0: # 每1000次存一下模型
+    #         saver = tf.train.Saver()
+    #         model_path = "C:\Song-Code\model\Dog_Breed_Identification.ckpt"
+    #         save_path = saver.save(sess, model_path)
 
     saver = tf.train.Saver()
     model_path = "C:\Song-Code\model\Dog_Breed_Identification.ckpt"
-    save_path = saver.save(sess, model_path)
     saver.restore(sess, model_path)
-
-    result = sess.run(y_, feed_dict={x:test, keep_prob:1.0, is_training: False})
-    re_pd = pd.DataFrame(result)
-    re_pd.columns = classes # 重名列
-    re_pd.insert(0, "id", test_id) # 插入id
-    re_pd.to_csv("C:/Song-Code/Practice/Dog Breed Identification/sub.csv", index=False)
+    validation = sess.run(y_, feed_dict={x: val, keep_prob:1.0, is_training:False})
+    # for i in range(11):
+    #     if i < 10:
+    #         temp = test[i*1000: (i+1)*1000]
+    #     else:
+    #         temp = test[i*1000:]
+    #     result = sess.run(y_, feed_dict={x:temp, keep_prob:1.0, is_training: False})
+    #     if i == 0:
+    #         re_pd = pd.DataFrame(result)
+    #     else:
+    #         temp2 = pd.DataFrame(result)
+    #         re_pd = pd.concat([re_pd, temp2], ignore_index=True)
+    #
+    # re_pd.columns = classes # 重名列
+    # re_pd.insert(0, "id", test_id) # 插入id
+    # re_pd.to_csv("C:/Song-Code/Practice/Dog Breed Identification/sub.csv", index=False)
